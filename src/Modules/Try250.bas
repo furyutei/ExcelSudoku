@@ -1,40 +1,41 @@
 Attribute VB_Name = "Try250"
 Option Explicit
 
-Type SudokuInfo
-    NumberValues(1 To 9, 1 To 9) As Variant
-    ResultNumberValues As Variant
-    Result As Boolean
+Type SudokuInfo ' 個別数独問題定義
+    NumberValues(1 To 9, 1 To 9) As Variant ' 問題
+    ResultNumberValues As Variant ' 解答
+    Result As Boolean ' 解析結果(True: 成功、False: 失敗）
 End Type
 
 Private Property Get Try250Sheet() As Worksheet
-    Set Try250Sheet = Worksheets("Try250")
+    Set Try250Sheet = Worksheets("Try250") ' 対象ワークシート
 End Property
  
 Private Property Get HomeCell() As Range
-    Set HomeCell = Try250Sheet.Range("L1")
+    Set HomeCell = Try250Sheet.Range("L1") ' ホームセル
 End Property
 
 Private Property Get SourceSudokuRange() As Range
-    Set SourceSudokuRange = Try250Sheet.Range("B1:J2250")
+    Set SourceSudokuRange = Try250Sheet.Range("B1:J2250") ' 250問数独行列（問題）
 End Property
 
 Private Property Get ResultSudokuRange() As Range
-    Set ResultSudokuRange = Try250Sheet.Range("L1:T2250")
+    Set ResultSudokuRange = Try250Sheet.Range("L1:T2250") ' 250問数独行列（解答）
 End Property
 
 Private Property Get ResultMarkSudokuRange() As Range
-    Set ResultMarkSudokuRange = Try250Sheet.Range("U1:U2250")
+    Set ResultMarkSudokuRange = Try250Sheet.Range("U1:U2250") ' 解析結果表示列
 End Property
 
 Private Property Get ElapsedCell() As Range
-    Set ElapsedCell = Try250Sheet.Range("V11")
+    Set ElapsedCell = Try250Sheet.Range("V11") ' 経過時間表示セル
 End Property
 
 Private Property Get ErrorCounterCell() As Range
-    Set ErrorCounterCell = Try250Sheet.Range("W12")
+    Set ErrorCounterCell = Try250Sheet.Range("W12") ' エラー（解析失敗）数表示セル
 End Property
 
+' 数独250問連続解析
 Sub SudokuTry250()
     Dim ObjectSudoku As ClassSudoku
     Dim SudokuNumber As Long
@@ -120,6 +121,7 @@ Sub SudokuTry250()
     Application.ScreenUpdating = True
 End Sub
 
+' 解析結果リセット（クリア）
 Sub SudokuReset250()
     With Try250Sheet
         .Activate

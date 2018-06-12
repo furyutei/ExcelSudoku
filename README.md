@@ -24,7 +24,7 @@ Excel で[数独（ナンプレ）](https://ja.wikipedia.org/wiki/%E6%95%B0%E7%8
 
 その他
 ------
-- ソースコードは、Excel の VBA からエクスポートしたもの
+- ソースコードは、Excel の VBA からエクスポートしたもの（文字コード：シフトJIS・改行：CR+LF）  
 - 250問連続解析については、[250問連続解析サンプルソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html#saisoku)で使用されている問題の入った Excel ファイルは著作権の関係で掲載できないため、ソースコード(使用しているのは[Try250.bas](https://github.com/furyutei/ExcelSudoku/blob/master/src/Modules/Try250.bas)と[ClassSudoku.cls](https://github.com/furyutei/ExcelSudoku/blob/master/src/ClassModules/ClassSudoku.cls))のみ公開としている。  
 
 参考

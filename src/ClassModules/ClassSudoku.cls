@@ -71,6 +71,7 @@ Private ElapsedTimeString As String ' 経過時間(Formatted)
 '}
 
 '■プロパティ(Public) {
+' 画面更新有効／無効切替用
 Public Property Let ScreenUpdate(ByVal Flag As Boolean)
     CurrentScreenUpdate = Flag
 End Property
@@ -79,6 +80,7 @@ Public Property Get ScreenUpdate() As Boolean
     ScreenUpdate = CurrentScreenUpdate
 End Property
 
+' 最新解析結果取得用
 Public Property Get LastResult() As Collection
     Set LastResult = New Collection
     
@@ -125,6 +127,7 @@ End Sub
 '}
 
 '■ メソッド(Public) {
+' 数独解析（Range指定版）
 Public Function TrySudoku(ByRef TargetSudokuRange As Range, Optional ByRef Reset As Boolean = False, Optional ByRef Update As Boolean = True) As Boolean
     If Reset Then Call ResetSudokuRange(TargetSudokuRange)
     
@@ -149,6 +152,7 @@ Public Function TrySudoku(ByRef TargetSudokuRange As Range, Optional ByRef Reset
     TrySudoku = TryResult
 End Function
 
+' 数独解析（配列指定版）
 Public Function TrySudokuValues(ByRef TargetNumberValues As Variant, ByRef ResultNumberValues As Variant) As Boolean
     TryCounter = 0
     
@@ -169,6 +173,8 @@ Public Function TrySudokuValues(ByRef TargetNumberValues As Variant, ByRef Resul
     TrySudokuValues = TryResult
 End Function
 
+' 数独問題(Range)リセット（回答クリア）
+' ※試行セル（文字色が青(vbBlue)のセル）はクリアされることに注意
 Public Function ResetSudokuRange(ByRef TargetSudokuRange As Range) As Boolean
     Application.ScreenUpdating = False
     Application.CutCopyMode = False
@@ -214,6 +220,9 @@ Public Function ResetSudokuRange(ByRef TargetSudokuRange As Range) As Boolean
     Application.ScreenUpdating = True
 End Function
 
+' 数独問題(Range)の妥当性チェック
+' ※残りの空欄数を返す
+' ※エラー（重複）セルがあれば、背景色を赤(vbRed)にする
 Public Function CheckSudokuRange(ByRef TargetSudokuRange As Range) As Long
     Application.ScreenUpdating = False
     Application.CutCopyMode = False
@@ -348,8 +357,6 @@ Private Function TrySudokuMatrix() As Boolean
     SavedStageNumber = CurrentStageNumber
     
     ' 候補がひとつだけのマスを埋める
-    CurrentRemainNumberMap = CurrentStage.MapInfo.RemainNumberMap
-    
     For RowNumber = 1 To 9
         For ColumnNumber = 1 To 9
             If NumberMatrix(RowNumber, ColumnNumber) = 0 Then
@@ -359,8 +366,6 @@ Private Function TrySudokuMatrix() As Boolean
                         Call PushStage(RowNumber, ColumnNumber, .NumberValues(1))
                         
                         GoSub CheckLastStage
-                        
-                        CurrentRemainNumberMap = CurrentStage.MapInfo.RemainNumberMap
                     End If
                 End With
             End If
@@ -413,6 +418,7 @@ CheckLastStage:
         TrySudokuMatrix = True
         Exit Function
     End If
+    CurrentRemainNumberMap = CurrentStage.MapInfo.RemainNumberMap
     Return
 End Function
 
@@ -601,3 +607,5 @@ Private Sub CalcGroupToPosition(ByRef GroupNumber As Long, ByRef GroupItemNumber
     ColumnNumber = 1 + 3 * Fix((GroupNumber - 1) / 3) + Fix((GroupItemNumber - 1) / 3)
 End Sub
 '}
+
+

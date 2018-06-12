@@ -7,6 +7,7 @@ Private Property Get SudokuRange() As Range
     Set SudokuRange = Range("A1:I9") ' ‘ÎÛ”“Æs—ñ(9~9ŒÅ’è)
 End Property
 
+' ”“Æ‰ğÍ
 Sub TrySudoku()
     Dim ObjectSudoku As ClassSudoku
     Dim Result As Collection
@@ -48,6 +49,7 @@ Sub TrySudoku()
     End If
 End Sub
 
+' ”“Æ‰ğ“šƒNƒŠƒA
 Sub ResetSudoku()
     Dim ObjectSudoku As ClassSudoku
     
