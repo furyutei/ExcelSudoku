@@ -340,9 +340,15 @@ Private Function TrySudokuMatrix() As Boolean
     Dim SavedStageNumber As Long
     Dim RowNumber As Long
     Dim ColumnNumber As Long
+    Dim GroupNumber As Long
+    Dim GroupItemNumber As Long
     Dim CurrentRemainNumberMap() As RemainNumberInfo
     Dim NumberList As BitNumberList
-    Dim MinNumberLength As Long
+    Dim MinPoint As Long
+    Dim CurrentPoint As Long
+    Dim CheckRowNumber As Long
+    Dim CheckColumnNumber As Long
+    Dim CheckGroupItemNumber As Long
     Dim TryRowNumber As Long
     Dim TryColumnNumber As Long
     Dim TryNumberList As BitNumberList
@@ -373,24 +379,54 @@ Private Function TrySudokuMatrix() As Boolean
     Next RowNumber
     
     ' 候補が最も少ないマスを抽出
-    MinNumberLength = 9999
+    MinPoint = 9999
     
     For RowNumber = 1 To 9
         For ColumnNumber = 1 To 9
             If NumberMatrix(RowNumber, ColumnNumber) = 0 Then
                 NumberList = BitmapToNumberValues(CurrentRemainNumberMap(RowNumber, ColumnNumber).NumberValuesBitMap)
-                With NumberList
-                    If .Length < MinNumberLength Then
+                CurrentPoint = NumberList.Length * 1000
+                
+'                If CurrentPoint < MinPoint Then
+'                    TryRowNumber = RowNumber
+'                    TryColumnNumber = ColumnNumber
+'                    MinPoint = CurrentPoint
+'                End If
+                
+                If CurrentPoint < MinPoint Then
+
+                    Call PositionToGroup(RowNumber, ColumnNumber, GroupNumber, GroupItemNumber)
+
+                    For CheckRowNumber = 1 To 9
+                        If CheckRowNumber <> RowNumber Then
+                            CurrentPoint = CurrentPoint + BitmapToNumberValues(CurrentRemainNumberMap(CheckRowNumber, ColumnNumber).NumberValuesBitMap).Length
+                        End If
+                    Next
+
+                    For CheckColumnNumber = 1 To 9
+                        If CheckColumnNumber <> ColumnNumber Then
+                            CurrentPoint = CurrentPoint + BitmapToNumberValues(CurrentRemainNumberMap(RowNumber, CheckColumnNumber).NumberValuesBitMap).Length
+                        End If
+                    Next
+
+                    For CheckGroupItemNumber = 1 To 9
+                        If CheckGroupItemNumber <> GroupItemNumber Then
+                            Call GroupToPosition(GroupNumber, CheckGroupItemNumber, CheckRowNumber, CheckColumnNumber)
+                            CurrentPoint = CurrentPoint + BitmapToNumberValues(CurrentRemainNumberMap(CheckRowNumber, CheckColumnNumber).NumberValuesBitMap).Length
+                        End If
+                    Next
+
+                    If CurrentPoint < MinPoint Then
                         TryRowNumber = RowNumber
                         TryColumnNumber = ColumnNumber
-                        MinNumberLength = .Length
+                        MinPoint = CurrentPoint
                     End If
-                End With
+                End If
             End If
         Next ColumnNumber
     Next RowNumber
     
-    If MinNumberLength < 9999 Then
+    If MinPoint < 9999 Then
         ' 抽出した候補を試行
         TryNumberList = BitmapToNumberValues(CurrentRemainNumberMap(TryRowNumber, TryColumnNumber).NumberValuesBitMap)
         

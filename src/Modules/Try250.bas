@@ -28,15 +28,17 @@ Private Property Get ResultMarkSudokuRange() As Range
 End Property
 
 Private Property Get ElapsedCell() As Range
-    Set ElapsedCell = Try250Sheet.Range("V11") ' 経過時間表示セル
+    Set ElapsedCell = Try250Sheet.Range("V8") ' 経過時間表示セル
 End Property
 
 Private Property Get ErrorCounterCell() As Range
-    Set ErrorCounterCell = Try250Sheet.Range("W12") ' エラー（解析失敗）数表示セル
+    Set ErrorCounterCell = Try250Sheet.Range("W9") ' エラー（解析失敗）数表示セル
 End Property
 
 ' 数独250問連続解析
-Sub SudokuTry250()
+Sub TrySudoku250()
+    Application.ScreenUpdating = False
+    
     Dim ObjectSudoku As ClassSudoku
     Dim SudokuNumber As Long
     Dim RowNumber As Long
@@ -50,8 +52,6 @@ Sub SudokuTry250()
     Dim EndTime As Double
     Dim ElapsedTime As Double
     Dim ElapsedTimeString As String
-    
-    Application.ScreenUpdating = False
 
     Set ObjectSudoku = New ClassSudoku
     
@@ -122,7 +122,9 @@ Sub SudokuTry250()
 End Sub
 
 ' 解析結果リセット（クリア）
-Sub SudokuReset250()
+Sub ResetSudoku250()
+    Application.ScreenUpdating = False
+
     With Try250Sheet
         .Activate
         HomeCell.Select
@@ -132,5 +134,77 @@ Sub SudokuReset250()
         ElapsedCell.Value = ""
         ErrorCounterCell.Value = ""
     End With
+    
+    Application.ScreenUpdating = True
+End Sub
+
+' 数独問題ファイル(CSV)読み込み
+Sub ReadCsvSudoku250()
+    Dim CurrentFolder As String
+    Dim SudokuBook As Workbook
+    Dim SudokuSheet As Worksheet
+    Dim TargetSudokuRange As Range
+    Dim CsvFileName As String
+    Dim CsvBook As Workbook
+    Dim CsvSudokuRange As Range
+    
+    Set SudokuBook = ActiveWorkbook
+    Set SudokuSheet = Try250Sheet
+    Set TargetSudokuRange = SourceSudokuRange
+    
+    CurrentFolder = CurDir
+    ChDir SudokuBook.Path & "\"
+    
+    CsvFileName = Application.GetOpenFilename(FileFilter:="数独問題ファイル,*.csv", Title:="数独問題ファイル(CSV)選択")
+    
+    If CsvFileName = "False" Then
+        GoTo ExitSub
+    End If
+    
+    Application.ScreenUpdating = False
+    
+    Set CsvBook = Workbooks.Open(CsvFileName)
+    Set CsvSudokuRange = CsvBook.Worksheets(1).Range(TargetSudokuRange.Address).Offset(RowOffset:=1)
+    
+    SudokuSheet.Unprotect
+    TargetSudokuRange.Value = CsvSudokuRange.Value
+    SudokuSheet.Protect
+    
+    Call CsvBook.Close(SaveChanges:=False)
+    SudokuBook.Activate
+    
+    Call ResetSudoku250
+    
+    Application.DisplayAlerts = False
+    SudokuBook.Save
+    Application.DisplayAlerts = True
+ExitSub:
+    ChDir CurrentFolder
+    Application.ScreenUpdating = True
+End Sub
+
+' 初期化
+Sub InitializeSudou250()
+    If MsgBox("初期化しますか？" & vbCrLf & "※数独の問題がすべて削除されます!!", Buttons:=vbYesNo, Title:="初期化確認") = vbNo Then
+        GoTo ExitSub
+    End If
+    
+    Call ResetSudoku250
+    Application.ScreenUpdating = False
+    
+    With Try250Sheet
+        .Activate
+        HomeCell.Select
+        
+        .Unprotect
+        SourceSudokuRange.ClearContents
+        .Protect
+    End With
+
+    Application.DisplayAlerts = False
+    ActiveWorkbook.Save
+    Application.DisplayAlerts = True
+ExitSub:
+    Application.ScreenUpdating = True
 End Sub
 

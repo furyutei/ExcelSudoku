@@ -11,21 +11,25 @@ Excel で[数独（ナンプレ）](https://ja.wikipedia.org/wiki/%E6%95%B0%E7%8
 
 パフォーマンスについて
 ----------------------
-数独の問題によってばらつきはあるが、ほぼ[m-haketa/suudoku: 数独を解くプログラム](https://github.com/m-haketa/suudoku)や[Excelで数独解析ソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html)と同等程度のパフォーマンスは出るようになった。  
+数独の問題によってばらつきはあるが、ほぼ[m-haketa/suudoku: 数独を解くプログラム](https://github.com/m-haketa/suudoku)や[Excelで数独解析ソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html)と同等程度のパフォーマンスは出るようになった……と思ったが、測定条件が良かっただけで、実際はこれらよりもかなり遅い模様。なかなか難しい……。  
 
 [250問連続解析サンプルソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html#saisoku)と同じことを自分の環境で実施した場合、  
 
-|本実装  |250問連続解析サンプルソフト|
-|:------:|:-------------------------:|
-|約0.45秒|約0.59秒                   |
+| |本実装|[250問連続解析サンプルソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html#saisoku)|
+|:-:|:------:|:-------------------------:|
+|[250問連続解析サンプルソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html#saisoku)上の問題|約0.59秒|約0.60秒|
+|[ナンプレ京（数独）](http://nanpre.adg5.com/index.php)上の問題(Lv1(200問)～2(50問))|約0.31秒|約0.15秒|
+|[ナンプレ京（数独）](http://nanpre.adg5.com/index.php)上の問題(Lv6(50問)～7(200問))|約2.94秒|約0.90秒|
 
-のような結果になった。  
+のような結果になった（2018/06/13現在）。  
 ※実効環境： Intel(R) Core(TM) i7-3820QM CPU @ 2.70GHz / Windows 10 Pro(64ビット) / Excel 2010(32ビット)   
 
 その他
 ------
-- ソースコードは、Excel の VBA からエクスポートしたもの（文字コード：シフトJIS・改行：CR+LF）  
-- 250問連続解析については、[250問連続解析サンプルソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html#saisoku)で使用されている問題の入った Excel ファイルは著作権の関係で掲載できないため、ソースコード(使用しているのは[Try250.bas](https://github.com/furyutei/ExcelSudoku/blob/master/src/Modules/Try250.bas)と[ClassSudoku.cls](https://github.com/furyutei/ExcelSudoku/blob/master/src/ClassModules/ClassSudoku.cls))のみ公開としている。  
+- ソースコードは、Excel の VBA からエクスポートしたもの（文字コード：シフトJIS・改行：CR+LF）。  
+- 250問連続解析については、[250問連続解析サンプルソフト](http://excel.syogyoumujou.com/freesoft/analysis_sudoku.html#saisoku)で使用されている問題の入った Excel ファイルは著作権の関係で掲載できない。
+  代替として、[ナンプレ京（数独）無料パズルゲーム 10000問以上](http://nanpre.adg5.com/index.php) 上の[数独問題を CSV ファイルとしてダウンロードできるスクリプトを用意した（使い方はスクリプトソース内に記載）](https://github.com/furyutei/ExcelSudoku/blob/master/src/js/DownloadSudoku256Csv.js)。  
+  これでダウンロードしたCSVファイルを、[ExcelSudokuTry250.xlsm](https://github.com/furyutei/ExcelSudoku/blob/master/ExcelSudokuTry250.xlsm)に読ませることで、250問連続解析が実行できる。  
 
 参考
 ----
