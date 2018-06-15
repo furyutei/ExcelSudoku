@@ -1,10 +1,14 @@
 Attribute VB_Name = "Try250"
 Option Explicit
 
+Private Const DebugMode = False
+
 Type SudokuInfo ' å¬ï êîì∆ñ‚ëËíËã`
     NumberValues(1 To 9, 1 To 9) As Variant ' ñ‚ëË
     ResultNumberValues As Variant ' âìö
     Result As Boolean ' âêÕåãâ (True: ê¨å˜ÅAFalse: é∏îsÅj
+    TryCounter As Long
+    ElapsedTimeString As String
 End Type
 
 Private Property Get Try250Sheet() As Worksheet
@@ -37,7 +41,10 @@ End Property
 
 ' êîì∆250ñ‚òAë±âêÕ
 Sub TrySudoku250()
+    Call ResetSudoku250
+    
     Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
     
     Dim ObjectSudoku As ClassSudoku
     Dim SudokuNumber As Long
@@ -46,20 +53,19 @@ Sub TrySudoku250()
     Dim RowOffset As Long
     Dim AllNumberValues As Variant
     Dim SudokuList(1 To 250) As SudokuInfo
-    Dim ResultMark As String
     Dim ErrorCounter As Long
     Dim StartTime As Double
     Dim EndTime As Double
     Dim ElapsedTime As Double
     Dim ElapsedTimeString As String
+    Dim LastResult As Collection
 
     Set ObjectSudoku = New ClassSudoku
+    Debug.Print "[ClassSudoku Version " & ObjectSudoku.Version & "]"
     
     With Try250Sheet
         .Activate
         HomeCell.Select
-        
-        ElapsedCell.Value = ""
         
         AllNumberValues = SourceSudokuRange.Value
  
@@ -80,6 +86,12 @@ Sub TrySudoku250()
         For SudokuNumber = 1 To 250
             With SudokuList(SudokuNumber)
                 .Result = ObjectSudoku.TrySudokuValues(.NumberValues, .ResultNumberValues)
+                
+                If DebugMode Then
+                    Set LastResult = ObjectSudoku.LastResult
+                    .TryCounter = LastResult.Item("TryCounter")
+                    .ElapsedTimeString = LastResult.Item("ElapsedTimeString")
+                End If
             End With
         Next
  
@@ -90,26 +102,28 @@ Sub TrySudoku250()
         
         ErrorCounter = 0
         
-        With ResultMarkSudokuRange
-            For SudokuNumber = 1 To 250
-                RowOffset = (SudokuNumber - 1) * 9
+        For SudokuNumber = 1 To 250
+            RowOffset = (SudokuNumber - 1) * 9
+            
+            With SudokuList(SudokuNumber)
+                For RowNumber = 1 To 9
+                    For ColumnNumber = 1 To 9
+                        AllNumberValues(RowOffset + RowNumber, ColumnNumber) = .ResultNumberValues(RowNumber, ColumnNumber)
+                    Next ColumnNumber
+                Next RowNumber
                 
-                With SudokuList(SudokuNumber)
-                    For RowNumber = 1 To 9
-                        For ColumnNumber = 1 To 9
-                            AllNumberValues(RowOffset + RowNumber, ColumnNumber) = .ResultNumberValues(RowNumber, ColumnNumber)
-                        Next ColumnNumber
-                    Next RowNumber
-                    
-                    ResultMark = IIf(.Result, "Åõ", "Å~")
-                    If .Result = False Then
-                        ErrorCounter = ErrorCounter + 1
-                    End If
-                End With
+                If .Result = False Then
+                    ErrorCounter = ErrorCounter + 1
+                End If
                 
-                .Cells(RowOffset + 1, 1).Value = ResultMark
-            Next SudokuNumber
-        End With
+                ResultMarkSudokuRange.Cells(RowOffset + 1, 1).Value = IIf(.Result, "Åõ", "Å~")
+                
+                If DebugMode Then
+                    ResultMarkSudokuRange.Cells(RowOffset + 2, 1).Value = .TryCounter
+                    ResultMarkSudokuRange.Cells(RowOffset + 3, 1).Value = .ElapsedTimeString
+                End If
+            End With
+        Next SudokuNumber
         
         ResultSudokuRange.Value = AllNumberValues
         ElapsedCell.Value = ElapsedTimeString
@@ -118,6 +132,7 @@ Sub TrySudoku250()
         Debug.Print "åãâ : " & ElapsedTimeString & "ïbåoâﬂ"
     End With
     
+    Application.Calculation = xlCalculationAutomatic
     Application.ScreenUpdating = True
 End Sub
 
@@ -133,6 +148,16 @@ Sub ResetSudoku250()
         ResultMarkSudokuRange.ClearContents
         ElapsedCell.Value = ""
         ErrorCounterCell.Value = ""
+        
+        .Unprotect
+        With .Range("V14:W15")
+            If DebugMode Then
+                .Font.Color = vbBlack
+            Else
+                .Font.Color = vbWhite
+            End If
+        End With
+        .Protect
     End With
     
     Application.ScreenUpdating = True
@@ -207,4 +232,3 @@ Sub InitializeSudou250()
 ExitSub:
     Application.ScreenUpdating = True
 End Sub
-

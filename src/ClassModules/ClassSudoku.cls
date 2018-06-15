@@ -10,8 +10,11 @@ Attribute VB_Exposed = False
 Option Explicit
 
 '■ 共通変数 {
+Private Const CurrentVersion As String = "0.0.1.4"
+
 ' オプション用
 Private CurrentScreenUpdate As Boolean ' True: 画面更新
+Private StageLogIsEnabled As Boolean ' True: ログ取得
 
 ' 行列←→グループ座標変換用
 Private Type PostionToGroupItem
@@ -29,7 +32,7 @@ Private PositionToGroupMap(1 To 9, 1 To 9) As PostionToGroupItem
 Private GroupToPositionMap(1 To 9, 1 To 9) As GroupToPositionItem
 
 ' ビット演算用
-Private Type BitNumberList
+Private Type NumberValueList
     Length As Long
     NumberValues(1 To 9) As Long
 End Type
@@ -37,15 +40,15 @@ End Type
 Private BitOperationInitialized As Boolean
 Private Bit() As Long
 Private BitAll As Long
-Private BitmapToNumberValues() As BitNumberList
+Private BitmapToNumberValues() As NumberValueList
 
 ' 試行履歴用
-Private Type RemainNumberInfo
-    NumberValuesBitMap As Long
+Private Type NumberMaps
+    RemainNumberMap As Long
 End Type
 
 Private Type MapInfo
-    RemainNumberMap(1 To 9, 1 To 9) As RemainNumberInfo
+    Matrix(1 To 9, 1 To 9) As NumberMaps
 End Type
 
 Private Type StageInfo
@@ -59,6 +62,9 @@ Private StageHistoryInitialized As Boolean
 Private StageHistoryLength As Long
 Private StageHistory(0 To 81) As StageInfo
 
+Private StageLogLength As Long
+Private StageLog() As String
+
 ' 数独結果格納用
 Private SudokuRange As Range ' 数独用セル範囲
 Private NumberMatrix() As Long ' 数独行列格納用
@@ -71,6 +77,11 @@ Private ElapsedTimeString As String ' 経過時間(Formatted)
 '}
 
 '■プロパティ(Public) {
+' バージョン取得用
+Public Property Get Version() As String
+    Version = CurrentVersion
+End Property
+
 ' 画面更新有効／無効切替用
 Public Property Let ScreenUpdate(ByVal Flag As Boolean)
     CurrentScreenUpdate = Flag
@@ -78,6 +89,15 @@ End Property
 
 Public Property Get ScreenUpdate() As Boolean
     ScreenUpdate = CurrentScreenUpdate
+End Property
+
+' ログ取得切替用
+Public Property Let Logging(ByVal Flag As Boolean)
+    StageLogIsEnabled = Flag
+End Property
+
+Public Property Get Logging() As Boolean
+    Logging = StageLogIsEnabled
 End Property
 
 ' 最新解析結果取得用
@@ -92,6 +112,8 @@ Public Property Get LastResult() As Collection
     Call LastResult.Add(StartTime, "StartTime")
     Call LastResult.Add(EndTime, "EndTime")
     Call LastResult.Add(ElapsedTimeString, "ElapsedTimeString")
+    Call LastResult.Add(StageLogLength, "StageLogLength")
+    Call LastResult.Add(WorksheetFunction.Transpose(StageLog), "StageLog")
 End Property
 '}
 
@@ -334,6 +356,8 @@ Private Sub InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant)
             End If
         Next ColumnNumber
     Next RowNumber
+
+    TryCounter = 0
 End Sub
 
 Private Function TrySudokuMatrix() As Boolean
@@ -342,8 +366,9 @@ Private Function TrySudokuMatrix() As Boolean
     Dim ColumnNumber As Long
     Dim GroupNumber As Long
     Dim GroupItemNumber As Long
-    Dim CurrentRemainNumberMap() As RemainNumberInfo
-    Dim NumberList As BitNumberList
+    Dim LastSetRowNumber As Long
+    Dim LastSetColumnNumber As Long
+    Dim NumberList As NumberValueList
     Dim MinPoint As Long
     Dim CurrentPoint As Long
     Dim CheckRowNumber As Long
@@ -351,88 +376,66 @@ Private Function TrySudokuMatrix() As Boolean
     Dim CheckGroupItemNumber As Long
     Dim TryRowNumber As Long
     Dim TryColumnNumber As Long
-    Dim TryNumberList As BitNumberList
-    Dim Index As Long
+    Dim TryNumberList As NumberValueList
+    Dim index As Long
     
     If ScreenUpdate Then Range("A1:I9").Value = NumberMatrix
-    
-    TryCounter = TryCounter + 1
     
     GoSub CheckLastStage
     
     SavedStageNumber = CurrentStageNumber
     
-    ' 候補がひとつだけのマスを埋める
-    For RowNumber = 1 To 9
-        For ColumnNumber = 1 To 9
-            If NumberMatrix(RowNumber, ColumnNumber) = 0 Then
-                NumberList = BitmapToNumberValues(CurrentRemainNumberMap(RowNumber, ColumnNumber).NumberValuesBitMap)
-                With NumberList
-                    If .Length = 1 Then
-                        Call PushStage(RowNumber, ColumnNumber, .NumberValues(1))
-                        
-                        GoSub CheckLastStage
-                    End If
-                End With
-            End If
-        Next ColumnNumber
-    Next RowNumber
-    
-    ' 候補が最も少ないマスを抽出
     MinPoint = 9999
+    LastSetRowNumber = 10
+    LastSetColumnNumber = 10
     
-    For RowNumber = 1 To 9
-        For ColumnNumber = 1 To 9
-            If NumberMatrix(RowNumber, ColumnNumber) = 0 Then
-                NumberList = BitmapToNumberValues(CurrentRemainNumberMap(RowNumber, ColumnNumber).NumberValuesBitMap)
-                CurrentPoint = NumberList.Length * 1000
-                
-'                If CurrentPoint < MinPoint Then
-'                    TryRowNumber = RowNumber
-'                    TryColumnNumber = ColumnNumber
-'                    MinPoint = CurrentPoint
-'                End If
-                
-                If CurrentPoint < MinPoint Then
-
-                    Call PositionToGroup(RowNumber, ColumnNumber, GroupNumber, GroupItemNumber)
-
-                    For CheckRowNumber = 1 To 9
-                        If CheckRowNumber <> RowNumber Then
-                            CurrentPoint = CurrentPoint + BitmapToNumberValues(CurrentRemainNumberMap(CheckRowNumber, ColumnNumber).NumberValuesBitMap).Length
+    Do
+        For RowNumber = 1 To 9
+            For ColumnNumber = 1 To 9
+                If RowNumber = LastSetRowNumber And ColumnNumber = LastSetColumnNumber Then GoTo BreakLoop
+            
+                If NumberMatrix(RowNumber, ColumnNumber) = 0 Then
+                    NumberList = GetRemainNumberList(RowNumber, ColumnNumber)
+                    
+                    With NumberList
+                        If .Length < 1 Then
+                            ' 候補が無ければ試行は失敗
+                            GoTo Failure
+                        ElseIf .Length = 1 Then
+                            ' 候補がひとつだけのマスを埋める
+                            Call PushStage(RowNumber, ColumnNumber, .NumberValues(1))
+                            
+                            GoSub CheckLastStage
+                            
+                            MinPoint = 9999
+                            LastSetRowNumber = RowNumber
+                            LastSetColumnNumber = ColumnNumber
+                        Else
+                            ' 候補がより少ないマスを記憶
+                            CurrentPoint = .Length * 1000
+                            
+                            If CurrentPoint < MinPoint Then
+                                TryRowNumber = RowNumber
+                                TryColumnNumber = ColumnNumber
+                                MinPoint = CurrentPoint
+                            End If
+                            
                         End If
-                    Next
-
-                    For CheckColumnNumber = 1 To 9
-                        If CheckColumnNumber <> ColumnNumber Then
-                            CurrentPoint = CurrentPoint + BitmapToNumberValues(CurrentRemainNumberMap(RowNumber, CheckColumnNumber).NumberValuesBitMap).Length
-                        End If
-                    Next
-
-                    For CheckGroupItemNumber = 1 To 9
-                        If CheckGroupItemNumber <> GroupItemNumber Then
-                            Call GroupToPosition(GroupNumber, CheckGroupItemNumber, CheckRowNumber, CheckColumnNumber)
-                            CurrentPoint = CurrentPoint + BitmapToNumberValues(CurrentRemainNumberMap(CheckRowNumber, CheckColumnNumber).NumberValuesBitMap).Length
-                        End If
-                    Next
-
-                    If CurrentPoint < MinPoint Then
-                        TryRowNumber = RowNumber
-                        TryColumnNumber = ColumnNumber
-                        MinPoint = CurrentPoint
-                    End If
+                    End With
                 End If
-            End If
-        Next ColumnNumber
-    Next RowNumber
-    
+            Next ColumnNumber
+        Next RowNumber
+    Loop While RowNumber <> LastSetRowNumber Or ColumnNumber <> LastSetColumnNumber
+
+BreakLoop:
+
     If MinPoint < 9999 Then
         ' 抽出した候補を試行
-        TryNumberList = BitmapToNumberValues(CurrentRemainNumberMap(TryRowNumber, TryColumnNumber).NumberValuesBitMap)
+        TryNumberList = BitmapToNumberValues(CurrentStage.MapInfo.Matrix(TryRowNumber, TryColumnNumber).RemainNumberMap)
         
         With TryNumberList
-            For Index = 1 To .Length
-                Call PushStage(TryRowNumber, TryColumnNumber, .NumberValues(Index))
+            For index = 1 To .Length
+                Call PushStage(TryRowNumber, TryColumnNumber, .NumberValues(index))
                 
                 If TrySudokuMatrix() Then
                     TrySudokuMatrix = True
@@ -443,7 +446,8 @@ Private Function TrySudokuMatrix() As Boolean
             Next
         End With
     End If
-    
+
+Failure:
     Call RestoreStage(SavedStageNumber)
     
     TrySudokuMatrix = False
@@ -454,7 +458,67 @@ CheckLastStage:
         TrySudokuMatrix = True
         Exit Function
     End If
-    CurrentRemainNumberMap = CurrentStage.MapInfo.RemainNumberMap
+    Return
+End Function
+
+Private Function GetRemainNumberList(ByRef RowNumber As Long, ByRef ColumnNumber As Long) As NumberValueList
+    Dim TargetBitMap As Long
+    Dim NumberList As NumberValueList
+    Dim GroupNumber As Long
+    Dim GroupItemNumber As Long
+    Dim CheckNumberList As NumberValueList
+    Dim ReservedNumberMap As Long
+    Dim CheckRowNumber As Long
+    Dim CheckColumnNumber As Long
+    Dim CheckGroupNumber As Long
+    Dim CheckGroupItemNumber As Long
+    
+    With CurrentStage.MapInfo
+        TargetBitMap = .Matrix(RowNumber, ColumnNumber).RemainNumberMap
+        NumberList = BitmapToNumberValues(TargetBitMap)
+        
+        If NumberList.Length <= 1 Then
+            GetRemainNumberList = NumberList
+            Exit Function
+        End If
+        
+        ReservedNumberMap = 0
+        For CheckRowNumber = 1 To 9
+            If CheckRowNumber <> RowNumber Then
+                ReservedNumberMap = ReservedNumberMap Or .Matrix(CheckRowNumber, ColumnNumber).RemainNumberMap
+            End If
+        Next
+        GoSub CheckFixed
+        
+        ReservedNumberMap = 0
+        For CheckColumnNumber = 1 To 9
+            If CheckColumnNumber <> ColumnNumber Then
+                ReservedNumberMap = ReservedNumberMap Or .Matrix(RowNumber, CheckColumnNumber).RemainNumberMap
+            End If
+        Next
+        GoSub CheckFixed
+        
+        ReservedNumberMap = 0
+        Call PositionToGroup(RowNumber, ColumnNumber, GroupNumber, GroupItemNumber)
+        For CheckGroupItemNumber = 1 To 9
+            If CheckGroupItemNumber <> GroupItemNumber Then
+                Call GroupToPosition(GroupNumber, CheckGroupItemNumber, CheckRowNumber, CheckColumnNumber)
+                ReservedNumberMap = ReservedNumberMap Or .Matrix(CheckRowNumber, CheckColumnNumber).RemainNumberMap
+            End If
+        Next
+        GoSub CheckFixed
+        
+        GetRemainNumberList = NumberList
+    End With
+    
+    Exit Function
+    
+CheckFixed:
+    CheckNumberList = BitmapToNumberValues(TargetBitMap And (Not ReservedNumberMap))
+    If CheckNumberList.Length = 1 Then
+        GetRemainNumberList = CheckNumberList
+        Exit Function
+    End If
     Return
 End Function
 
@@ -469,18 +533,24 @@ Private Sub InitializeStageHistory()
     With StageHistory(StageHistoryLength)
         For RowNumber = 1 To 9
             For ColumnNumber = 1 To 9
-                With .MapInfo.RemainNumberMap(RowNumber, ColumnNumber)
-                    .NumberValuesBitMap = BitAll
+                With .MapInfo.Matrix(RowNumber, ColumnNumber)
+                    .RemainNumberMap = BitAll
                 End With
             Next ColumnNumber
         Next RowNumber
     End With
+    
+    StageLogLength = 0
+    ReDim StageLog(1 To 4, 1 To 1)
     
     StageHistoryInitialized = True
 End Sub
 
 Private Sub ResetStageHistory()
     StageHistoryLength = 0
+    
+    StageLogLength = 0
+    ReDim StageLog(1 To 4, 1 To 1)
 End Sub
 
 Private Sub RestoreStage(ByRef StageNumber As Long)
@@ -496,9 +566,20 @@ Private Sub PushStage(ByRef SetRowNumber As Long, ByRef SetColumnNumber As Long,
     Dim CheckColumnNumber As Long
     Dim CheckGroupItemNumber As Long
     
+    TryCounter = TryCounter + 1
+    
     NumberMatrix(SetRowNumber, SetColumnNumber) = SetNumberValue
     
     StageHistoryLength = StageHistoryLength + 1
+    
+    If StageLogIsEnabled Then
+        StageLogLength = StageLogLength + 1
+        ReDim Preserve StageLog(1 To 4, 1 To StageLogLength)
+        StageLog(1, StageLogLength) = StageHistoryLength
+        StageLog(2, StageLogLength) = SetRowNumber
+        StageLog(3, StageLogLength) = SetColumnNumber
+        StageLog(4, StageLogLength) = SetNumberValue
+    End If
     
     With StageHistory(StageHistoryLength)
         .RowNumber = SetRowNumber
@@ -506,24 +587,24 @@ Private Sub PushStage(ByRef SetRowNumber As Long, ByRef SetColumnNumber As Long,
         .NumberValue = SetNumberValue
         .MapInfo = StageHistory(StageHistoryLength - 1).MapInfo
         
-        With .MapInfo.RemainNumberMap(SetRowNumber, SetColumnNumber)
-            .NumberValuesBitMap = 0
+        With .MapInfo.Matrix(SetRowNumber, SetColumnNumber)
+            .RemainNumberMap = Bit(SetNumberValue)
         End With
         
         Call PositionToGroup(SetRowNumber, SetColumnNumber, SetGroupNumber, SetGroupItemNumber)
         
         For CheckRowNumber = 1 To 9
             If CheckRowNumber <> SetRowNumber Then
-                With .MapInfo.RemainNumberMap(CheckRowNumber, SetColumnNumber)
-                    Call BitOff(.NumberValuesBitMap, SetNumberValue)
+                With .MapInfo.Matrix(CheckRowNumber, SetColumnNumber)
+                    Call BitOff(.RemainNumberMap, SetNumberValue)
                 End With
             End If
         Next
         
         For CheckColumnNumber = 1 To 9
             If CheckColumnNumber <> SetColumnNumber Then
-                With .MapInfo.RemainNumberMap(SetRowNumber, CheckColumnNumber)
-                    Call BitOff(.NumberValuesBitMap, SetNumberValue)
+                With .MapInfo.Matrix(SetRowNumber, CheckColumnNumber)
+                    Call BitOff(.RemainNumberMap, SetNumberValue)
                 End With
             End If
         Next
@@ -531,8 +612,8 @@ Private Sub PushStage(ByRef SetRowNumber As Long, ByRef SetColumnNumber As Long,
         For CheckGroupItemNumber = 1 To 9
             If CheckGroupItemNumber <> SetGroupItemNumber Then
                 Call GroupToPosition(SetGroupNumber, CheckGroupItemNumber, CheckRowNumber, CheckColumnNumber)
-                With .MapInfo.RemainNumberMap(CheckRowNumber, CheckColumnNumber)
-                    Call BitOff(.NumberValuesBitMap, SetNumberValue)
+                With .MapInfo.Matrix(CheckRowNumber, CheckColumnNumber)
+                    Call BitOff(.RemainNumberMap, SetNumberValue)
                 End With
             End If
         Next
@@ -552,7 +633,7 @@ Private Sub InitializeBitOperation(Optional ByRef MaxNumberValue = 9)
     
     Dim NumberValue As Long
     Dim BitIndex As Long
-    Dim Index As Long
+    Dim index As Long
     
     BitAll = 0
     ReDim Bit(1 To MaxNumberValue)
@@ -567,14 +648,14 @@ Private Sub InitializeBitOperation(Optional ByRef MaxNumberValue = 9)
     For NumberValue = 1 To MaxNumberValue
         BitIndex = Bit(NumberValue)
         
-        For Index = 0 To BitIndex - 1
-            BitmapToNumberValues(BitIndex + Index) = BitmapToNumberValues(Index)
+        For index = 0 To BitIndex - 1
+            BitmapToNumberValues(BitIndex + index) = BitmapToNumberValues(index)
 
-            With BitmapToNumberValues(BitIndex + Index)
+            With BitmapToNumberValues(BitIndex + index)
                 .Length = .Length + 1
                 .NumberValues(.Length) = NumberValue
             End With
-        Next Index
+        Next index
     Next NumberValue
     
     BitOperationInitialized = True
@@ -634,14 +715,12 @@ Private Sub GroupToPosition(ByRef GroupNumber As Long, ByRef GroupItemNumber As 
 End Sub
 
 Private Sub CalcPositionToGroup(ByRef RowNumber As Long, ByRef ColumnNumber As Long, ByRef GroupNumber As Long, ByRef GroupItemNumber As Long)
-    GroupNumber = Fix((RowNumber + 2) / 3) + 3 * (Fix((ColumnNumber + 2) / 3) - 1)
-    GroupItemNumber = 1 + ((RowNumber + 2) Mod 3) + 3 * ((ColumnNumber + 2) Mod 3)
+    GroupNumber = 3 * (Fix((RowNumber + 2) / 3) - 1) + Fix((ColumnNumber + 2) / 3)
+    GroupItemNumber = 3 * ((RowNumber + 2) Mod 3) + 1 + ((ColumnNumber + 2) Mod 3)
 End Sub
 
 Private Sub CalcGroupToPosition(ByRef GroupNumber As Long, ByRef GroupItemNumber As Long, ByRef RowNumber As Long, ByRef ColumnNumber As Long)
-    RowNumber = 1 + 3 * ((GroupNumber - 1) Mod 3) + ((GroupItemNumber - 1) Mod 3)
-    ColumnNumber = 1 + 3 * Fix((GroupNumber - 1) / 3) + Fix((GroupItemNumber - 1) / 3)
+    ColumnNumber = 1 + 3 * ((GroupNumber - 1) Mod 3) + ((GroupItemNumber - 1) Mod 3)
+    RowNumber = 1 + 3 * Fix((GroupNumber - 1) / 3) + Fix((GroupItemNumber - 1) / 3)
 End Sub
 '}
-
-
