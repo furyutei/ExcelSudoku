@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 '■ 共通変数 {
-Private Const CurrentVersion As String = "0.0.1.6"
+Private Const CurrentVersion As String = "0.0.1.7"
 
 ' オプション用
 Private CurrentScreenUpdate As Boolean ' True: 画面更新
@@ -228,15 +228,15 @@ ExitFunction:
 End Function
 
 ' 数独問題(Range)リセット（回答クリア）
-' ※試行セル（文字色が青(vbBlue)のセル）はクリアされることに注意
-Public Function ResetSudokuRange(ByRef TargetSudokuRange As Range) As Boolean
+' ※試行セル（文字色で指定・デフォルトは青(vbBlue)）はクリアされることに注意
+' ※エラー（重複）セルがあれば色付け
+Public Function ResetSudokuRange(ByRef TargetSudokuRange As Range, Optional ByRef InitialCellColor As Long = vbBlack, Optional ByRef TrialCellColor As Long = vbBlue, Optional ByRef ErrorCellColor As Long = vbBlack, Optional ByRef ErrorBackgroundColor As Long = vbRed) As Boolean
     Application.ScreenUpdating = False
     Application.CutCopyMode = False
 
     Dim SudokuRangeValues As Variant
     Dim RowNumber As Long
     Dim ColumnNumber As Long
-    Dim NumberMatrix() As Long
     Dim ErrorInfos() As Variant
     Dim ErrorIndex As Long
     
@@ -249,23 +249,25 @@ Public Function ResetSudokuRange(ByRef TargetSudokuRange As Range) As Boolean
     
         For RowNumber = 1 To 9
             For ColumnNumber = 1 To 9
-                If SudokuRangeValues(RowNumber, ColumnNumber) = 0 Or .Cells(RowNumber, ColumnNumber).Font.Color = vbBlue Then
-                    NumberMatrix(RowNumber, ColumnNumber) = 0
+                If SudokuRangeValues(RowNumber, ColumnNumber) = 0 Or .Cells(RowNumber, ColumnNumber).Font.Color = TrialCellColor Then
+                    SudokuRangeValues(RowNumber, ColumnNumber) = 0
                     .Cells(RowNumber, ColumnNumber).Value = ""
-                    .Cells(RowNumber, ColumnNumber).Font.Color = vbBlue
+                    .Cells(RowNumber, ColumnNumber).Font.Color = TrialCellColor
                 Else
-                    NumberMatrix(RowNumber, ColumnNumber) = .Cells(RowNumber, ColumnNumber).Value
-                    .Cells(RowNumber, ColumnNumber).Font.Color = vbBlack
+                    .Cells(RowNumber, ColumnNumber).Font.Color = InitialCellColor
                 End If
                 .Cells(RowNumber, ColumnNumber).Interior.ColorIndex = xlNone
             Next ColumnNumber
         Next RowNumber
         
-        If 0 <= InitializeSudokuMatrix(NumberMatrix, ErrorInfos, CheckOnly:=True) Then
+        If 0 <= InitializeSudokuMatrix(SudokuRangeValues, ErrorInfos, CheckOnly:=True) Then
             ResetSudokuRange = True
         Else
             For ErrorIndex = 1 To UBound(ErrorInfos)
-                .Cells(ErrorInfos(ErrorIndex)(0), ErrorInfos(ErrorIndex)(1)).Interior.Color = vbRed
+                With .Cells(ErrorInfos(ErrorIndex)(0), ErrorInfos(ErrorIndex)(1))
+                    .Font.Color = ErrorCellColor
+                    .Interior.Color = ErrorBackgroundColor
+                End With
             Next ErrorIndex
             ResetSudokuRange = False
         End If
@@ -276,15 +278,13 @@ End Function
 
 ' 数独問題(Range)の妥当性チェック
 ' ※残りの空欄数を返す
-' ※エラー（重複）セルがあれば、背景色を赤(vbRed)にする
-Public Function CheckSudokuRange(ByRef TargetSudokuRange As Range) As Long
+' ※エラー（重複）セルがあれば色付け
+Public Function CheckSudokuRange(ByRef TargetSudokuRange As Range, Optional ByRef ErrorCellColor As Long = vbBlack, Optional ByRef ErrorBackgroundColor As Long = vbRed) As Long
     Application.ScreenUpdating = False
     Application.CutCopyMode = False
 
-    Dim SudokuRangeValues As Variant
     Dim RowNumber As Long
     Dim ColumnNumber As Long
-    Dim NumberMatrix() As Long
     Dim ErrorInfos() As Variant
     Dim ErrorIndex As Long
     Dim RemainCounter As Long
@@ -294,19 +294,14 @@ Public Function CheckSudokuRange(ByRef TargetSudokuRange As Range) As Long
     With TargetSudokuRange
         .Cells(1, 1).Select
         
-        SudokuRangeValues = .Value
-        
-        For RowNumber = 1 To 9
-            For ColumnNumber = 1 To 9
-                NumberMatrix(RowNumber, ColumnNumber) = SudokuRangeValues(RowNumber, ColumnNumber)
-            Next ColumnNumber
-        Next RowNumber
-        
-        RemainCounter = InitializeSudokuMatrix(NumberMatrix, ErrorInfos, CheckOnly:=True)
+        RemainCounter = InitializeSudokuMatrix(.Value, ErrorInfos, CheckOnly:=True)
         
         If RemainCounter < 0 Then
             For ErrorIndex = 1 To UBound(ErrorInfos)
-                .Cells(ErrorInfos(ErrorIndex)(0), ErrorInfos(ErrorIndex)(1)).Interior.Color = vbRed
+                With .Cells(ErrorInfos(ErrorIndex)(0), ErrorInfos(ErrorIndex)(1))
+                    .Font.Color = ErrorCellColor
+                    .Interior.Color = ErrorBackgroundColor
+                End With
             Next ErrorIndex
         End If
     End With
@@ -324,9 +319,6 @@ Private Function InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant, ByRe
     Dim ColumnNumber As Long
     Dim GroupNumber As Long
     Dim GroupItemNumber As Long
-    Dim CheckRowNumber As Long
-    Dim CheckColumnNumber As Long
-    Dim CheckGroupItemNumber As Long
     Dim NumberValue As Long
     Dim CheckNumberValue As Long
     Dim MapInfo As MapInfo
@@ -351,10 +343,17 @@ Private Function InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant, ByRe
     
     Call ResetStageHistory
     MapInfo = StageHistory(0).MapInfo
-
+    
+    On Error GoTo BreakLoop ' 数値以外が入っていた場合はエラー処理
+    
     For RowNumber = 1 To 9
         For ColumnNumber = 1 To 9
-            NumberValue = SudokuRangeValues(RowNumber, ColumnNumber)
+'            If Not IsNumeric(SudokuRangeValues(RowNumber, ColumnNumber)) Then
+'                ReDim Preserve ErrorInfos(UBound(ErrorInfos) + 1)
+'                ErrorInfos(UBound(ErrorInfos)) = Array(RowNumber, ColumnNumber)
+'                GoTo ExitFunction
+'            End If
+            NumberValue = SudokuRangeValues(RowNumber, ColumnNumber) ' 数値以外の時にはエラー発生
             If Not CheckOnly Then NumberMatrix(RowNumber, ColumnNumber) = NumberValue
             
             If NumberValue <> 0 Then
@@ -374,7 +373,15 @@ Private Function InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant, ByRe
             End If
         Next ColumnNumber
     Next RowNumber
-                
+    
+BreakLoop:
+    On Error GoTo 0
+    If RowNumber <> 10 Or ColumnNumber <> 10 Then
+        ReDim Preserve ErrorInfos(UBound(ErrorInfos) + 1)
+        ErrorInfos(UBound(ErrorInfos)) = Array(RowNumber, ColumnNumber)
+        GoTo ExitFunction
+    End If
+    
     For RowNumber = 1 To 9
         For ColumnNumber = 1 To 9
             NumberValue = SudokuRangeValues(RowNumber, ColumnNumber)
@@ -399,7 +406,8 @@ Private Function InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant, ByRe
             End If
         Next ColumnNumber
     Next RowNumber
-    
+
+ExitFunction:
     If 0 < UBound(ErrorInfos) Then
         InitializeSudokuMatrix = -1
         Exit Function
@@ -790,5 +798,4 @@ Private Sub CalcGroupToPosition(ByRef GroupNumber As Long, ByRef GroupItemNumber
     RowNumber = 1 + 3 * Fix((GroupNumber - 1) / 3) + Fix((GroupItemNumber - 1) / 3)
 End Sub
 '}
-
 

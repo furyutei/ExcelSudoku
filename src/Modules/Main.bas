@@ -15,8 +15,12 @@ Sub TrySudoku()
     Dim TryCounter As Long
     Dim ElapsedTimeString As String
     Dim StageLogLength As Long
+    Dim IsProtected As Boolean
     
     Set ObjectSudoku = New ClassSudoku
+    
+    IsProtected = ActiveSheet.ProtectContents
+    If IsProtected Then ActiveSheet.Unprotect
     
     With ObjectSudoku
         .ScreenUpdate = ScreenUpdate
@@ -24,16 +28,14 @@ Sub TrySudoku()
         
         Debug.Print "[ClassSudoku Version " & .Version & "]"
         
-        ' 数独問題初期化＆妥当性チェック
-        SudokuRange.Font.Color = vbBlack
-        If Not .ResetSudokuRange(SudokuRange) Then
-            MsgBox "不正な問題"
-            Exit Sub
-        End If
+        Call ClearSudokuResult
         
-        Range("G10").Value = ""
-        Range("C10").Value = ""
-        Range("U:X").ClearContents
+        ' 数独問題初期化＆妥当性チェック
+        SudokuRange.Font.Color = vbBlack ' 青色(vbBlue)のセルはクリアされてしまうので、変更しておく
+        If Not .ResetSudokuRange(SudokuRange, TrialCellColor:=vbBlue) Then
+            MsgBox "不正な問題"
+            GoTo ExitSub
+        End If
         
         ' 数独解読処理
         Call .TrySudoku(SudokuRange)
@@ -47,13 +49,16 @@ Sub TrySudoku()
     
         If Logging Then
             StageLogLength = Result.Item("StageLogLength")
-            If 0 < StageLogLength Then Range(Cells(1, "U"), Cells(StageLogLength, "X")).Value = Result.Item("StageLog")
+            If 0 < StageLogLength Then
+                ' [ログ内容] ステージ番号(＝埋まったマスの数), 行番号, 列番号, 設定値(数字)
+                Range(Cells(1, "U"), Cells(StageLogLength, "X")).Value = Result.Item("StageLog")
+            End If
         End If
         
         Range("C10").Value = TryCounter
         Range("G10").Value = ElapsedTimeString
         SudokuRange.Cells(1, 1).Select
-    
+        
         ' 数独回答チェック
         If .CheckSudokuRange(SudokuRange) = 0 Then
             MsgBox "解読成功"
@@ -61,19 +66,37 @@ Sub TrySudoku()
             MsgBox "あれれ…？"
         End If
     End With
+    
+ExitSub:
+    If IsProtected Then ActiveSheet.Protect
 End Sub
 
 ' 数独解答クリア
 Sub ResetSudoku()
     Dim ObjectSudoku As ClassSudoku
+    Dim IsProtected As Boolean
     
     Set ObjectSudoku = New ClassSudoku
-
-    With ObjectSudoku
-        Range("G10").Value = ""
-        Range("C10").Value = ""
-        Range("U:X").ClearContents
     
-        Call .ResetSudokuRange(SudokuRange)
+    IsProtected = ActiveSheet.ProtectContents
+    If IsProtected Then ActiveSheet.Unprotect
+    
+    Call ClearSudokuResult
+    Call ObjectSudoku.ResetSudokuRange(SudokuRange, TrialCellColor:=vbBlue)
+    
+    If IsProtected Then ActiveSheet.Protect
+End Sub
+
+Private Sub ClearSudokuResult()
+    Range("G10").Value = ""
+    Range("C10").Value = ""
+    
+    With Columns("U:X")
+        .ClearContents
+        If Logging Then
+            .Hidden = False
+        Else
+            .Hidden = True
+        End If
     End With
 End Sub

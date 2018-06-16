@@ -138,6 +138,8 @@ End Sub
 
 ' 解析結果リセット（クリア）
 Sub ResetSudoku250()
+    Dim IsProtected As Boolean
+    
     Application.ScreenUpdating = False
 
     With Try250Sheet
@@ -149,7 +151,9 @@ Sub ResetSudoku250()
         ElapsedCell.Value = ""
         ErrorCounterCell.Value = ""
         
-        .Unprotect
+        IsProtected = .ProtectContents
+        If IsProtected Then .Unprotect
+        
         With .Range("V14:W15")
             If DebugMode Then
                 .Font.Color = vbBlack
@@ -157,7 +161,8 @@ Sub ResetSudoku250()
                 .Font.Color = vbWhite
             End If
         End With
-        .Protect
+        
+        If IsProtected Then .Protect
     End With
     
     Application.ScreenUpdating = True
@@ -172,6 +177,7 @@ Sub ReadCsvSudoku250()
     Dim CsvFileName As String
     Dim CsvBook As Workbook
     Dim CsvSudokuRange As Range
+    Dim IsProtected As Boolean
     
     Set SudokuBook = ActiveWorkbook
     Set SudokuSheet = Try250Sheet
@@ -191,9 +197,12 @@ Sub ReadCsvSudoku250()
     Set CsvBook = Workbooks.Open(CsvFileName)
     Set CsvSudokuRange = CsvBook.Worksheets(1).Range(TargetSudokuRange.Address).Offset(RowOffset:=1)
     
-    SudokuSheet.Unprotect
+    IsProtected = SudokuSheet.ProtectContents
+    If IsProtected Then SudokuSheet.Unprotect
+    
     TargetSudokuRange.Value = CsvSudokuRange.Value
-    SudokuSheet.Protect
+    
+    If IsProtected Then SudokuSheet.Protect
     
     Call CsvBook.Close(savechanges:=False)
     SudokuBook.Activate
@@ -244,20 +253,24 @@ End Sub
 
 ' 初期化
 Sub InitializeSudou250()
+    Dim IsProtected As Boolean
+    
     If MsgBox("初期化しますか？" & vbCrLf & "※数独の問題がすべて削除されます!!", Buttons:=vbYesNo, Title:="初期化確認") = vbNo Then
         GoTo ExitSub
     End If
     
     Call ResetSudoku250
     Application.ScreenUpdating = False
-    
     With Try250Sheet
         .Activate
         HomeCell.Select
         
-        .Unprotect
+        IsProtected = .ProtectContents
+        If IsProtected Then .Unprotect
+        
         SourceSudokuRange.ClearContents
-        .Protect
+        
+        If IsProtected Then .Protect
     End With
 
     Application.DisplayAlerts = False
