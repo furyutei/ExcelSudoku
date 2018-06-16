@@ -232,7 +232,7 @@ Sub SaveResultCsvSudoku250()
     CurrentFolder = CurDir
     ChDir SudokuBook.Path & "\"
     
-    CsvFileName = Application.GetSaveAsFilename("Resut-lExcelSudokuTry250.csv", FileFilter:="数独結果ファイル,*.csv*", Title:="数独結果ファイル(CSV)名指定")
+    CsvFileName = Application.GetSaveAsFilename("Result-ExcelSudokuTry250.csv", FileFilter:="数独結果ファイル,*.csv*", Title:="数独結果ファイル(CSV)名指定")
     
     If CsvFileName = "False" Then
         GoTo ExitSub
