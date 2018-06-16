@@ -10,11 +10,12 @@ Attribute VB_Exposed = False
 Option Explicit
 
 '■ 共通変数 {
-Private Const CurrentVersion As String = "0.0.1.4"
+Private Const CurrentVersion As String = "0.0.1.5"
 
 ' オプション用
 Private CurrentScreenUpdate As Boolean ' True: 画面更新
 Private StageLogIsEnabled As Boolean ' True: ログ取得
+Private CheckInDescendingOrder As Boolean ' True: マスに入る候補が複数ある場合、降順にチェック
 
 ' 行列←→グループ座標変換用
 Private Type PostionToGroupItem
@@ -100,6 +101,15 @@ Public Property Get Logging() As Boolean
     Logging = StageLogIsEnabled
 End Property
 
+' 数値チェック方法（マスに入る候補のチェック順）切替用
+Public Property Let CheckOrderDesc(ByVal Flag As Boolean)
+    CheckInDescendingOrder = Flag
+End Property
+
+Public Property Get CheckOrderDesc() As Boolean
+    CheckOrderDesc = CheckInDescendingOrder
+End Property
+
 ' 最新解析結果取得用
 Public Property Get LastResult() As Collection
     Set LastResult = New Collection
@@ -138,6 +148,8 @@ End Property
 '■ コンストラクタ／デコンストラクタ {
 Private Sub Class_Initialize()
     CurrentScreenUpdate = False
+    StageLogIsEnabled = False
+    CheckInDescendingOrder = False
     
     Call InitializeBitOperation
     Call InitializeGroupMap
@@ -177,6 +189,8 @@ End Function
 ' 数独解析（配列指定版）
 Public Function TrySudokuValues(ByRef TargetNumberValues As Variant, ByRef ResultNumberValues As Variant) As Boolean
     TryCounter = 0
+    
+    Set SudokuRange = Nothing
     
     StartTime = Timer
     
@@ -377,7 +391,10 @@ Private Function TrySudokuMatrix() As Boolean
     Dim TryRowNumber As Long
     Dim TryColumnNumber As Long
     Dim TryNumberList As NumberValueList
-    Dim index As Long
+    Dim Index As Long
+    Dim StartIndex As Long
+    Dim EndIndex As Long
+    Dim StepIndex As Long
     
     If ScreenUpdate Then Range("A1:I9").Value = NumberMatrix
     
@@ -434,8 +451,18 @@ BreakLoop:
         TryNumberList = BitmapToNumberValues(CurrentStage.MapInfo.Matrix(TryRowNumber, TryColumnNumber).RemainNumberMap)
         
         With TryNumberList
-            For index = 1 To .Length
-                Call PushStage(TryRowNumber, TryColumnNumber, .NumberValues(index))
+            If CheckInDescendingOrder Then
+                StartIndex = .Length
+                EndIndex = 1
+                StepIndex = -1
+            Else
+                StartIndex = 1
+                EndIndex = .Length
+                StepIndex = 1
+            End If
+            
+            For Index = StartIndex To EndIndex Step StepIndex
+                Call PushStage(TryRowNumber, TryColumnNumber, .NumberValues(Index))
                 
                 If TrySudokuMatrix() Then
                     TrySudokuMatrix = True
@@ -633,7 +660,7 @@ Private Sub InitializeBitOperation(Optional ByRef MaxNumberValue = 9)
     
     Dim NumberValue As Long
     Dim BitIndex As Long
-    Dim index As Long
+    Dim Index As Long
     
     BitAll = 0
     ReDim Bit(1 To MaxNumberValue)
@@ -648,14 +675,14 @@ Private Sub InitializeBitOperation(Optional ByRef MaxNumberValue = 9)
     For NumberValue = 1 To MaxNumberValue
         BitIndex = Bit(NumberValue)
         
-        For index = 0 To BitIndex - 1
-            BitmapToNumberValues(BitIndex + index) = BitmapToNumberValues(index)
+        For Index = 0 To BitIndex - 1
+            BitmapToNumberValues(BitIndex + Index) = BitmapToNumberValues(Index)
 
-            With BitmapToNumberValues(BitIndex + index)
+            With BitmapToNumberValues(BitIndex + Index)
                 .Length = .Length + 1
                 .NumberValues(.Length) = NumberValue
             End With
-        Next index
+        Next Index
     Next NumberValue
     
     BitOperationInitialized = True
@@ -724,3 +751,5 @@ Private Sub CalcGroupToPosition(ByRef GroupNumber As Long, ByRef GroupItemNumber
     RowNumber = 1 + 3 * Fix((GroupNumber - 1) / 3) + Fix((GroupItemNumber - 1) / 3)
 End Sub
 '}
+
+

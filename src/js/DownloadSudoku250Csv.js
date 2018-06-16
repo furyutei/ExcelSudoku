@@ -15,10 +15,10 @@ ExcelSudokuTry250用の数独CSVファイルをダウンロード
 'use strict';
 
 const
-    CSV_FILENAME = 'SudokuTry250.csv',
+    CSV_BASENAME = 'ナンプレ京（数独）-Level',
     MAX_SUDOKU_NUMBER = 250,
     
-    START_LEVEL = 7,
+    DEFAULT_START_LEVEL = 7,
     LEVEL_ASCENDING = false,
     MAX_LEVEL_INDEX = 200,
     
@@ -28,7 +28,8 @@ const
     
     URL_TEMPLATE = new URL( location.href ).origin + '/nanpre.php?lv=#LEVEL#&q=#INDEX#';
     
-let level,
+let start_level,
+    level,
     index,
     url_list = [],
     partial_url_list,
@@ -117,14 +118,29 @@ const
             bom = new Uint8Array( [ 0xEF, 0xBB, 0xBF ] ),
             blob = new Blob( [ bom, csv ], { 'type' : 'text/csv' } ),
             blob_url = URL.createObjectURL( blob ),
-            $download_link = $( '<a/>' ).attr( { download : CSV_FILENAME, href : blob_url } ).text( CSV_FILENAME ).css( { 'visibility' : 'hidden' } );
+            csvf_filename = CSV_BASENAME + start_level + '→' + level + '.csv',
+            $download_link = $( '<a/>' ).attr( { download : csvf_filename, href : blob_url } ).text( csvf_filename ).css( { 'visibility' : 'hidden' } );
         
         $download_link.appendTo( 'body' );
         $download_link[ 0 ].click();
         $download_link.remove();
     };
 
-level = START_LEVEL;
+start_level = prompt( '[数独250問ダウンロード] 開始レベルを指定してください: ' + ( LEVEL_ASCENDING ? '1～6' : '2～7'), DEFAULT_START_LEVEL );
+if ( start_level === null ) {
+    console.log( 'Exit' );
+    return;
+}
+
+start_level = parseInt( start_level, 10 );
+
+if ( isNaN( start_level ) || ( LEVEL_ASCENDING && ( start_level < 1 || 7 <= start_level ) ) || ( ( ! LEVEL_ASCENDING ) && ( start_level <= 1 || 7 < start_level ) ) ) {
+    start_level = ( LEVEL_ASCENDING ) ? DEFAULT_START_LEVEL - 1 : DEFAULT_START_LEVEL;
+}
+
+console.log( 'Start Level:', start_level, ( LEVEL_ASCENDING ) ? 'ascending' : 'descending' );
+
+level = start_level;
 index = 1;
 
 while ( url_list.length < MAX_SUDOKU_NUMBER ) {
