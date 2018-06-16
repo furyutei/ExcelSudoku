@@ -195,13 +195,47 @@ Sub ReadCsvSudoku250()
     TargetSudokuRange.Value = CsvSudokuRange.Value
     SudokuSheet.Protect
     
-    Call CsvBook.Close(SaveChanges:=False)
+    Call CsvBook.Close(savechanges:=False)
     SudokuBook.Activate
     
     Call ResetSudoku250
     
     Application.DisplayAlerts = False
     SudokuBook.Save
+    Application.DisplayAlerts = True
+ExitSub:
+    ChDir CurrentFolder
+    Application.ScreenUpdating = True
+End Sub
+
+' 数独結果ファイル(CSV)出力
+Sub SaveResultCsvSudoku250()
+    Dim CurrentFolder As String
+    Dim SudokuBook As Workbook
+    Dim SudokuSheet As Worksheet
+    Dim TargetSudokuRange As Range
+    Dim CsvFileName As String
+    
+    Set SudokuBook = ActiveWorkbook
+    Set SudokuSheet = Try250Sheet
+    Set TargetSudokuRange = ResultSudokuRange
+    
+    CurrentFolder = CurDir
+    ChDir SudokuBook.Path & "\"
+    
+    CsvFileName = Application.GetSaveAsFilename("Resut-lExcelSudokuTry250.csv", FileFilter:="数独結果ファイル,*.csv*", Title:="数独結果ファイル(CSV)名指定")
+    
+    If CsvFileName = "False" Then
+        GoTo ExitSub
+    End If
+    
+    Application.ScreenUpdating = False
+    TargetSudokuRange.Copy Destination:=Worksheets.Add.Range("A1")
+    ActiveSheet.Move
+    
+    Application.DisplayAlerts = False
+    ActiveWorkbook.SaveAs Filename:=CsvFileName, FileFormat:=xlCSV
+    ActiveWorkbook.Close savechanges:=False
     Application.DisplayAlerts = True
 ExitSub:
     ChDir CurrentFolder

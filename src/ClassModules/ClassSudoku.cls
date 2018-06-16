@@ -10,7 +10,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 '■ 共通変数 {
-Private Const CurrentVersion As String = "0.0.1.5"
+Private Const CurrentVersion As String = "0.0.1.6"
 
 ' オプション用
 Private CurrentScreenUpdate As Boolean ' True: 画面更新
@@ -75,6 +75,7 @@ Private StartTime As Double ' 試行開始タイマ値
 Private EndTime As Double ' 試行終了タイマ値
 Private ElapsedTime As Double ' 経過時間
 Private ElapsedTimeString As String ' 経過時間(Formatted)
+Private LastErrorInfos() As Variant ' エラー情報
 '}
 
 '■プロパティ(Public) {
@@ -124,6 +125,7 @@ Public Property Get LastResult() As Collection
     Call LastResult.Add(ElapsedTimeString, "ElapsedTimeString")
     Call LastResult.Add(StageLogLength, "StageLogLength")
     Call LastResult.Add(WorksheetFunction.Transpose(StageLog), "StageLog")
+    Call LastResult.Add(LastErrorInfos, "ErrorInfos")
 End Property
 '}
 
@@ -163,18 +165,28 @@ End Sub
 '■ メソッド(Public) {
 ' 数独解析（Range指定版）
 Public Function TrySudoku(ByRef TargetSudokuRange As Range, Optional ByRef Reset As Boolean = False, Optional ByRef Update As Boolean = True) As Boolean
-    If Reset Then Call ResetSudokuRange(TargetSudokuRange)
+    Dim RemainCounter As Long
+    Dim ErrorInfos() As Variant
     
-    TryCounter = 0
+    If Reset Then Call ResetSudokuRange(TargetSudokuRange)
     
     Set SudokuRange = TargetSudokuRange
     
     StartTime = Timer
     
-    Call InitializeSudokuMatrix(SudokuRange)
+    TryCounter = 0
+    
+    RemainCounter = InitializeSudokuMatrix(SudokuRange, ErrorInfos)
+    If RemainCounter < 0 Then
+        LastErrorInfos = ErrorInfos
+        TrySudoku = False
+        GoTo ExitFunction
+    End If
     
     TryResult = TrySudokuMatrix()
+    TrySudoku = TryResult
     
+ExitFunction:
     EndTime = Timer
     If EndTime < StartTime Then EndTime = EndTime + 24 * 60 * 60
     
@@ -182,22 +194,30 @@ Public Function TrySudoku(ByRef TargetSudokuRange As Range, Optional ByRef Reset
     ElapsedTimeString = Format(ElapsedTime, "0.0000")
     
     If Update Then SudokuRange.Value = NumberMatrix
-    
-    TrySudoku = TryResult
 End Function
 
 ' 数独解析（配列指定版）
 Public Function TrySudokuValues(ByRef TargetNumberValues As Variant, ByRef ResultNumberValues As Variant) As Boolean
-    TryCounter = 0
+    Dim RemainCounter As Long
+    Dim ErrorInfos() As Variant
     
     Set SudokuRange = Nothing
     
     StartTime = Timer
     
-    Call InitializeSudokuMatrix(TargetNumberValues)
+    TryCounter = 0
+    
+    RemainCounter = InitializeSudokuMatrix(TargetNumberValues, ErrorInfos)
+    If RemainCounter < 0 Then
+        LastErrorInfos = ErrorInfos
+        TrySudokuValues = False
+        GoTo ExitFunction
+    End If
     
     TryResult = TrySudokuMatrix()
+    TrySudokuValues = TryResult
     
+ExitFunction:
     EndTime = Timer
     If EndTime < StartTime Then EndTime = EndTime + 24 * 60 * 60
     
@@ -205,8 +225,6 @@ Public Function TrySudokuValues(ByRef TargetNumberValues As Variant, ByRef Resul
     ElapsedTimeString = Format(ElapsedTime, "0.0000")
     
     ResultNumberValues = NumberMatrix
-
-    TrySudokuValues = TryResult
 End Function
 
 ' 数独問題(Range)リセット（回答クリア）
@@ -243,7 +261,7 @@ Public Function ResetSudokuRange(ByRef TargetSudokuRange As Range) As Boolean
             Next ColumnNumber
         Next RowNumber
         
-        If 0 <= CheckSudokuMatrix(NumberMatrix, ErrorInfos) Then
+        If 0 <= InitializeSudokuMatrix(NumberMatrix, ErrorInfos, CheckOnly:=True) Then
             ResetSudokuRange = True
         Else
             For ErrorIndex = 1 To UBound(ErrorInfos)
@@ -284,7 +302,7 @@ Public Function CheckSudokuRange(ByRef TargetSudokuRange As Range) As Long
             Next ColumnNumber
         Next RowNumber
         
-        RemainCounter = CheckSudokuMatrix(NumberMatrix, ErrorInfos)
+        RemainCounter = InitializeSudokuMatrix(NumberMatrix, ErrorInfos, CheckOnly:=True)
         
         If RemainCounter < 0 Then
             For ErrorIndex = 1 To UBound(ErrorInfos)
@@ -300,79 +318,100 @@ End Function
 '}
 
 '■ メソッド(Private) {
-Private Function CheckSudokuMatrix(ByRef NumberMatrix() As Long, ByRef ErrorInfos() As Variant) As Long
-    Dim RowNumberValueCounters(1 To 9, 1 To 9) As Long
-    Dim ColumnNumberValueCounters(1 To 9, 1 To 9) As Long
-    Dim GroupNumberValueCounters(1 To 9, 1 To 9) As Long
+Private Function InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant, ByRef ErrorInfos() As Variant, Optional CheckOnly As Boolean = False) As Long
+    Dim RemainCounter As Long
     Dim RowNumber As Long
     Dim ColumnNumber As Long
     Dim GroupNumber As Long
     Dim GroupItemNumber As Long
-    Dim SetNumberValue As Long
-    Dim ErrorIndex As Long
-        
-    CheckSudokuMatrix = 81
+    Dim CheckRowNumber As Long
+    Dim CheckColumnNumber As Long
+    Dim CheckGroupItemNumber As Long
+    Dim NumberValue As Long
+    Dim CheckNumberValue As Long
+    Dim MapInfo As MapInfo
+    Dim Index As Long
+    Dim RowRemainNumberMap(1 To 9) As Long
+    Dim ColumnRemainNumberMap(1 To 9) As Long
+    Dim GroupRemainNumberMap(1 To 9) As Long
+    Dim RowNumberValueCounters(1 To 9, 1 To 9) As Long
+    Dim ColumnNumberValueCounters(1 To 9, 1 To 9) As Long
+    Dim GroupNumberValueCounters(1 To 9, 1 To 9) As Long
+    
+    RemainCounter = 81
+    
+    ReDim NumberMatrix(1 To 9, 1 To 9)
     ReDim ErrorInfos(0)
     
+    For Index = 1 To 9
+        RowRemainNumberMap(Index) = BitAll
+        ColumnRemainNumberMap(Index) = BitAll
+        GroupRemainNumberMap(Index) = BitAll
+    Next
+    
+    Call ResetStageHistory
+    MapInfo = StageHistory(0).MapInfo
+
     For RowNumber = 1 To 9
         For ColumnNumber = 1 To 9
-            SetNumberValue = NumberMatrix(RowNumber, ColumnNumber)
-            If SetNumberValue <> 0 Then
+            NumberValue = SudokuRangeValues(RowNumber, ColumnNumber)
+            If Not CheckOnly Then NumberMatrix(RowNumber, ColumnNumber) = NumberValue
+            
+            If NumberValue <> 0 Then
                 Call PositionToGroup(RowNumber, ColumnNumber, GroupNumber, GroupItemNumber)
-                RowNumberValueCounters(RowNumber, SetNumberValue) = RowNumberValueCounters(RowNumber, SetNumberValue) + 1
-                ColumnNumberValueCounters(ColumnNumber, SetNumberValue) = ColumnNumberValueCounters(ColumnNumber, SetNumberValue) + 1
-                GroupNumberValueCounters(GroupNumber, SetNumberValue) = GroupNumberValueCounters(GroupNumber, SetNumberValue) + 1
+                
+                With MapInfo.Matrix(RowNumber, ColumnNumber)
+                    .RemainNumberMap = Bit(NumberValue)
+                End With
+                
+                Call BitOff(RowRemainNumberMap(RowNumber), NumberValue)
+                Call BitOff(ColumnRemainNumberMap(ColumnNumber), NumberValue)
+                Call BitOff(GroupRemainNumberMap(GroupNumber), NumberValue)
+                
+                RowNumberValueCounters(RowNumber, NumberValue) = RowNumberValueCounters(RowNumber, NumberValue) + 1
+                ColumnNumberValueCounters(ColumnNumber, NumberValue) = ColumnNumberValueCounters(ColumnNumber, NumberValue) + 1
+                GroupNumberValueCounters(GroupNumber, NumberValue) = GroupNumberValueCounters(GroupNumber, NumberValue) + 1
             End If
         Next ColumnNumber
     Next RowNumber
-    
+                
     For RowNumber = 1 To 9
         For ColumnNumber = 1 To 9
-            SetNumberValue = NumberMatrix(RowNumber, ColumnNumber)
-            If SetNumberValue <> 0 Then
+            NumberValue = SudokuRangeValues(RowNumber, ColumnNumber)
+            
+            If NumberValue = 0 Then
                 Call PositionToGroup(RowNumber, ColumnNumber, GroupNumber, GroupItemNumber)
                 
+                With MapInfo.Matrix(RowNumber, ColumnNumber)
+                    .RemainNumberMap = RowRemainNumberMap(RowNumber) And ColumnRemainNumberMap(ColumnNumber) And GroupRemainNumberMap(GroupNumber)
+                End With
+            Else
                 If _
-                    1 < RowNumberValueCounters(RowNumber, SetNumberValue) Or _
-                    1 < ColumnNumberValueCounters(ColumnNumber, SetNumberValue) Or _
-                    1 < GroupNumberValueCounters(GroupNumber, SetNumberValue) _
+                    1 < RowNumberValueCounters(RowNumber, NumberValue) Or _
+                    1 < ColumnNumberValueCounters(ColumnNumber, NumberValue) Or _
+                    1 < GroupNumberValueCounters(GroupNumber, NumberValue) _
                 Then
                     ReDim Preserve ErrorInfos(UBound(ErrorInfos) + 1)
                     ErrorInfos(UBound(ErrorInfos)) = Array(RowNumber, ColumnNumber)
                 Else
-                    CheckSudokuMatrix = CheckSudokuMatrix - 1
+                    RemainCounter = RemainCounter - 1
                 End If
             End If
         Next ColumnNumber
     Next RowNumber
     
-    If UBound(ErrorInfos) <= 0 Then
+    If 0 < UBound(ErrorInfos) Then
+        InitializeSudokuMatrix = -1
         Exit Function
     End If
     
-    CheckSudokuMatrix = -1
+    If Not CheckOnly Then
+        StageHistoryLength = 81 - RemainCounter
+        StageHistory(StageHistoryLength).MapInfo = MapInfo
+    End If
+    
+    InitializeSudokuMatrix = RemainCounter
 End Function
-
-Private Sub InitializeSudokuMatrix(ByRef SudokuRangeValues As Variant)
-    Dim RowNumber As Long
-    Dim ColumnNumber As Long
-    Dim NumberValue As Long
-    
-    ReDim NumberMatrix(1 To 9, 1 To 9)
-    
-    Call ResetStageHistory
-    
-    For RowNumber = 1 To 9
-        For ColumnNumber = 1 To 9
-            NumberValue = SudokuRangeValues(RowNumber, ColumnNumber)
-            If NumberValue <> 0 Then
-                Call PushStage(RowNumber, ColumnNumber, NumberValue)
-            End If
-        Next ColumnNumber
-    Next RowNumber
-
-    TryCounter = 0
-End Sub
 
 Private Function TrySudokuMatrix() As Boolean
     Dim SavedStageNumber As Long
